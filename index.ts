@@ -35,6 +35,25 @@ async function run() {
     const squadsCollection = db.collection("squads");
 
     // ====================  Squads  ====================
+    // Get Squad Data From DB
+    app.get("/api/squads", async (req: Request, res: Response) => {
+      try {
+        const squads = await squadsCollection
+          .find()
+          .sort({ _id: -1 })
+          .toArray();
+        res.status(200).json(squads);
+      } catch (err: unknown) {
+        const errorMessage =
+          err instanceof Error ? err.message : "Unknown error occurred";
+        res.status(500).json({
+          success: false,
+          message: "Internal Server Error. Something went wrong!",
+          error: errorMessage,
+        });
+      }
+    });
+
     // Insert New Squad Data on DB
     app.post("/api/squads", async (req: Request, res: Response) => {
       try {
@@ -46,7 +65,8 @@ async function run() {
         const result = await squadsCollection.insertOne(squadData);
         res.status(201).json(result);
       } catch (err: unknown) {
-        const errorMessage = err instanceof Error ? err.message : "Unknown error occurred";
+        const errorMessage =
+          err instanceof Error ? err.message : "Unknown error occurred";
         res.status(500).json({
           success: false,
           message: "Internal Server Error. Something went wrong!",
