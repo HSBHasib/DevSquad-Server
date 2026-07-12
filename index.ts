@@ -1,6 +1,7 @@
 import express, { Request, Response } from "express";
 import cors from "cors";
 import dotenv from "dotenv";
+import { ObjectId } from "mongodb";
 
 dotenv.config();
 
@@ -35,7 +36,27 @@ async function run() {
     const squadsCollection = db.collection("squads");
 
     // ====================  Squads  ====================
-    // Get Squad Data From DB
+    // Get 4 Squad Data From DB
+    app.get("/api/four-squads", async (req: Request, res: Response) => {
+      try {
+        const squads = await squadsCollection
+          .find()
+          .sort({ _id: -1 })
+          .limit(4)
+          .toArray();
+        res.status(200).json(squads);
+      } catch (err: unknown) {
+        const errorMessage =
+          err instanceof Error ? err.message : "Unknown error occurred";
+        res.status(500).json({
+          success: false,
+          message: "Internal Server Error. Something went wrong!",
+          error: errorMessage,
+        });
+      }
+    });
+
+    // Get Squads Data From DB
     app.get("/api/squads", async (req: Request, res: Response) => {
       try {
         const squads = await squadsCollection
@@ -58,12 +79,45 @@ async function run() {
     app.post("/api/squads", async (req: Request, res: Response) => {
       try {
         const squad = req.body;
+
+        const parsedCapacity = squad.capacity
+          ? parseInt(squad.capacity, 10)
+          : 4;
+
         const squadData = {
           ...squad,
+          totalSlots: parsedCapacity,
+          joinedCount: 1,
           createdAt: new Date(),
         };
+
         const result = await squadsCollection.insertOne(squadData);
         res.status(201).json(result);
+      } catch (err: unknown) {
+        const errorMessage =
+          err instanceof Error ? err.message : "Unknown error occurred";
+        res.status(500).json({
+          success: false,
+          message: "Internal Server Error. Something went wrong!",
+          error: errorMessage,
+        });
+      }
+    });
+
+    // Delete Squad Data From DB
+    app.delete("/api/squads/:id", async (req: Request, res: Response) => {
+      try {
+        const { id } = req.params;
+
+        if (!id) {
+          return res
+            .status(400)
+            .send({ success: false, message: "Squad ID is required" });
+        }
+
+        const filter = { _id: new ObjectId(id as string) };
+        const result = await squadsCollection.deleteOne(filter);
+        res.status(200).send(result);
       } catch (err: unknown) {
         const errorMessage =
           err instanceof Error ? err.message : "Unknown error occurred";
