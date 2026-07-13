@@ -33,7 +33,32 @@ async function run() {
     const db = client.db(process.env.DB_NAME);
 
     // Create or Access to DB Collections
+    const userCollection = db.collection("user");
     const squadsCollection = db.collection("squads");
+
+    // ====================  Users  ====================
+    app.get("/api/users", async (req: Request, res: Response) => {
+      try {
+        const users = await userCollection
+          .find({})
+          .sort({ createdAt: -1 }) 
+          .toArray();
+
+        res.status(200).json({
+          success: true,
+          message: "Most recent users retrieved successfully",
+          data: users,
+        });
+      } catch (error) {
+        console.error("Error fetching users:", error);
+        res.status(500).json({
+          success: false,
+          message: "Internal server error while fetching users",
+        });
+      }
+    });
+
+
 
     // ====================  Squads  ====================
     // Filter Interface
@@ -85,7 +110,7 @@ async function run() {
 
           const query: Filter<SquadData & { userId?: string }> = {};
 
-          // User ID 
+          // User ID
           if (userId) {
             query.userId = userId;
           }
