@@ -35,6 +35,7 @@ async function run() {
     // Create or Access to DB Collections
     const userCollection = db.collection("user");
     const squadsCollection = db.collection("squads");
+    const applicationsCollection = db.collection("applications");
 
     // ====================  Users  ====================
     // Get Users Data
@@ -275,6 +276,30 @@ async function run() {
         const filter = { _id: new ObjectId(id as string) };
         const result = await squadsCollection.deleteOne(filter);
         res.status(200).send(result);
+      } catch (err: unknown) {
+        const errorMessage =
+          err instanceof Error ? err.message : "Unknown error occurred";
+        res.status(500).json({
+          success: false,
+          message: "Internal Server Error. Something went wrong!",
+          error: errorMessage,
+        });
+      }
+    });
+
+    // ====================  Applications  ====================
+    // Insert Application Data on DB
+    app.post("/api/applications", async (req: Request, res: Response) => {
+      try {
+        const application = req.body;
+
+        const squadData = {
+          ...application,
+          createdAt: new Date(),
+        };
+
+        const result = await applicationsCollection.insertOne(squadData);
+        res.status(201).json(result);
       } catch (err: unknown) {
         const errorMessage =
           err instanceof Error ? err.message : "Unknown error occurred";
