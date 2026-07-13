@@ -37,11 +37,12 @@ async function run() {
     const squadsCollection = db.collection("squads");
 
     // ====================  Users  ====================
+    // Get Users Data
     app.get("/api/users", async (req: Request, res: Response) => {
       try {
         const users = await userCollection
           .find({})
-          .sort({ createdAt: -1 }) 
+          .sort({ createdAt: -1 })
           .toArray();
 
         res.status(200).json({
@@ -58,7 +59,30 @@ async function run() {
       }
     });
 
+    // Delete User Data From MongoDB
+    app.delete("/api/users/:id", async (req: Request, res: Response) => {
+      try {
+        const { id } = req.params;
 
+        if (!id) {
+          return res
+            .status(400)
+            .send({ success: false, message: "User ID is required" });
+        }
+
+        const filter = { _id: new ObjectId(id as string) };
+        const result = await userCollection.deleteOne(filter);
+        res.status(200).send(result);
+      } catch (err: unknown) {
+        const errorMessage =
+          err instanceof Error ? err.message : "Unknown error occurred";
+        res.status(500).json({
+          success: false,
+          message: "Internal Server Error. Something went wrong!",
+          error: errorMessage,
+        });
+      }
+    });
 
     // ====================  Squads  ====================
     // Filter Interface
