@@ -1,7 +1,7 @@
 import express, { Request, Response } from "express";
 import cors from "cors";
 import dotenv from "dotenv";
-import { Filter, ObjectId } from "mongodb";
+import { Document, Filter, ObjectId } from "mongodb";
 
 dotenv.config();
 
@@ -288,6 +288,89 @@ async function run() {
     });
 
     // ====================  Applications  ====================
+    interface GetApplicationsQuery {
+      ownerId?: string;
+      page?: string;
+      limit?: string;
+    }
+
+    // Get Applications Data From DB
+    app.get(
+      "/api/applications",
+      async (req: Request<{}, {}, {}, GetApplicationsQuery>, res: Response) => {
+        try {
+          const { ownerId, page, limit } = req.query;
+
+          if (!ownerId) {
+            return res.status(400).json({
+              success: false,
+              message: "ownerId is required to fetch applications!",
+            });
+          }
+
+          const pageNum = parseInt(page || "1", 10);
+          const limitNum = parseInt(limit || "10", 10);
+          const skipNum = (pageNum - 1) * limitNum;
+
+          const pipeline: Document[] = [
+            { $match: { ownerId } },
+            {
+              $addFields: {
+                squadObjectId: { $toObjectId: "$squadId" },
+              },
+            },
+            {
+              $lookup: {
+                from: "squads",
+                localField: "squadObjectId",
+                foreignField: "_id",
+                as: "squadDetails",
+              },
+            },
+            {
+              $unwind: {
+                path: "$squadDetails",
+                preserveNullAndEmptyArrays: true,
+              },
+            },
+            {
+              $addFields: {
+                squadName: {
+                  $ifNull: ["$squadDetails.projectName", "Unknown Squad"],
+                },
+              },
+            },
+            { $project: { squadDetails: 0, squadObjectId: 0 } },
+            { $sort: { _id: -1 } },
+            { $skip: skipNum },
+            { $limit: limitNum },
+          ];
+
+          const applications = await applicationsCollection
+            .aggregate(pipeline)
+            .toArray();
+
+          const totalMatchingApps = await applicationsCollection.countDocuments(
+            { ownerId },
+          );
+
+          res.status(200).json({
+            success: true,
+            total: totalMatchingApps,
+            data: applications,
+          });
+        } catch (err: unknown) {
+          const errorMessage =
+            err instanceof Error ? err.message : "Unknown error occurred";
+          res.status(500).json({
+            success: false,
+            message: "Internal Server Error. Something went wrong!",
+            error: errorMessage,
+          });
+        }
+      },
+    );
+
     // Insert Application Data on DB
     app.post("/api/applications", async (req: Request, res: Response) => {
       try {
