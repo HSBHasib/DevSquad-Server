@@ -1,7 +1,7 @@
 import express, { Request, Response } from "express";
 import cors from "cors";
 import dotenv from "dotenv";
-import { ObjectId } from "mongodb";
+import { Filter, ObjectId } from "mongodb";
 
 dotenv.config();
 
@@ -36,6 +36,133 @@ async function run() {
     const squadsCollection = db.collection("squads");
 
     // ====================  Squads  ====================
+    // Filter Interface
+    interface SquadQueryReq {
+      search?: string;
+      category?: string;
+      tech?: string;
+      teamSize?: "2" | "3" | "4" | "all";
+      sort?: "latest" | "slots";
+      page?: string;
+      limit?: string;
+    }
+
+    // Squad Data Interface
+    interface SquadData {
+      _id?: string;
+      projectName: string;
+      category: string;
+      shortDescription: string;
+      fullScope: string;
+      capacity: string;
+      communicationLink: string;
+      coverImage: string;
+      techStack: string[];
+      totalSlots?: number;
+      joinedCount?: number;
+      userId?: string;
+      createdAt?: Date;
+    }
+
+    // Get Squads Data From DB
+    app.get(
+      "/api/squads",
+      async (
+        req: Request<{}, {}, {}, SquadQueryReq & { userId?: string }>,
+        res: Response,
+      ) => {
+        try {
+          const {
+            search,
+            category,
+            tech,
+            teamSize,
+            sort,
+            page,
+            limit,
+            userId,
+          } = req.query;
+
+          const query: Filter<SquadData & { userId?: string }> = {};
+
+          // User ID 
+          if (userId) {
+            query.userId = userId;
+          }
+
+          // Search
+          if (search) {
+            query.$or = [
+              { projectName: { $regex: search, $options: "i" } },
+              { shortDescription: { $regex: search, $options: "i" } },
+              { techStack: { $regex: search, $options: "i" } },
+            ];
+          }
+
+          // Category
+          if (category) {
+            query.category = { $regex: `^${category}$`, $options: "i" };
+          }
+
+          // Tech Stack
+          if (tech) {
+            query.techStack = { $regex: `^${tech}$`, $options: "i" };
+          }
+
+          // Capacity
+          if (teamSize) {
+            if (teamSize === "2") {
+              query.capacity = "2";
+            } else if (teamSize === "3") {
+              query.capacity = "3";
+            } else if (teamSize === "4") {
+              query.capacity = { $in: ["4", "5", "6"] };
+            }
+          }
+
+          // Sort data based on 'latest created' squad and slots
+          let sortOptions: Record<string, 1 | -1> = { _id: -1 };
+          if (sort === "slots") {
+            sortOptions = { totalSlots: -1 };
+          } else if (sort === "latest") {
+            sortOptions = { _id: -1 };
+          }
+
+          // Pagination
+          let squadsQuery = squadsCollection.find(query).sort(sortOptions);
+
+          if (page && limit) {
+            const pageNum = parseInt(page, 10) || 1;
+            const limitNum = parseInt(limit, 10) || 6;
+            const skipNum = (pageNum - 1) * limitNum;
+
+            squadsQuery = squadsQuery.skip(skipNum).limit(limitNum);
+          }
+
+          // Access Data from DB
+          const squads = await squadsQuery.toArray();
+
+          // Count Total Squads
+          const totalMatchingSquads =
+            await squadsCollection.countDocuments(query);
+
+          res.status(200).json({
+            success: true,
+            total: totalMatchingSquads,
+            data: squads,
+          });
+        } catch (err: unknown) {
+          const errorMessage =
+            err instanceof Error ? err.message : "Unknown error occurred";
+          res.status(500).json({
+            success: false,
+            message: "Internal Server Error. Something went wrong!",
+            error: errorMessage,
+          });
+        }
+      },
+    );
+
     // Get 4 Squad Data From DB
     app.get("/api/four-squads", async (req: Request, res: Response) => {
       try {
@@ -43,25 +170,6 @@ async function run() {
           .find()
           .sort({ _id: -1 })
           .limit(4)
-          .toArray();
-        res.status(200).json(squads);
-      } catch (err: unknown) {
-        const errorMessage =
-          err instanceof Error ? err.message : "Unknown error occurred";
-        res.status(500).json({
-          success: false,
-          message: "Internal Server Error. Something went wrong!",
-          error: errorMessage,
-        });
-      }
-    });
-
-    // Get Squads Data From DB
-    app.get("/api/squads", async (req: Request, res: Response) => {
-      try {
-        const squads = await squadsCollection
-          .find()
-          .sort({ _id: -1 })
           .toArray();
         res.status(200).json(squads);
       } catch (err: unknown) {
