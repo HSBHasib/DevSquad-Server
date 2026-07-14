@@ -119,6 +119,20 @@ async function run() {
       next();
     };
 
+    // For User & Admin
+    const verifyUserAndAdmin = async (
+      req: AuthenticatedRequest,
+      res: Response,
+      next: NextFunction,
+    ) => {
+      const allowedRoles = ["user", "admin"];
+      const userRole = req.user?.role || "admin";
+      if (!allowedRoles.includes(userRole)) {
+        return res.status(403).json({ message: "forbidden access" });
+      }
+      next();
+    };
+
     // ====================  Users  ====================
     // Get Users Data
     app.get("/api/users", async (req: Request, res: Response) => {
@@ -145,7 +159,7 @@ async function run() {
     });
 
     // Delete User Data From MongoDB
-    app.delete("/api/users/:id", async (req: Request, res: Response) => {
+    app.delete("/api/users/:id", verifyToken, verifyAdmin, async (req: Request, res: Response) => {
       try {
         const { id } = req.params;
 
@@ -318,7 +332,7 @@ async function run() {
     });
 
     // Insert New Squad Data on DB
-    app.post("/api/squads", async (req: Request, res: Response) => {
+    app.post("/api/squads", verifyToken, verifyUser, async (req: Request, res: Response) => {
       try {
         const squad = req.body;
 
@@ -347,7 +361,7 @@ async function run() {
     });
 
     // Update Squad Data From DB
-    app.patch("/api/squads/:id", async (req: Request, res: Response) => {
+    app.patch("/api/squads/:id", verifyToken, verifyUser, async (req: Request, res: Response) => {
       try {
         const { id } = req.params; // Application ID
         const { status: targetStatus } = req.body; // Status
@@ -449,7 +463,7 @@ async function run() {
     });
 
     // Delete Squad Data From DB
-    app.delete("/api/squads/:id", async (req: Request, res: Response) => {
+    app.delete("/api/squads/:id", verifyToken, verifyUserAndAdmin, async (req: Request, res: Response) => {
       try {
         const { id } = req.params;
 
@@ -481,8 +495,9 @@ async function run() {
     }
 
     // Get Applications Data From DB
-    app.get(
-      "/api/applications",
+    app.get("/api/applications",
+      verifyToken,
+      verifyUser,
       async (req: Request<{}, {}, {}, GetApplicationsQuery>, res: Response) => {
         try {
           const { ownerId, page, limit } = req.query;
@@ -529,7 +544,7 @@ async function run() {
     );
 
     // Insert Application Data on DB
-    app.post("/api/applications", async (req: Request, res: Response) => {
+    app.post("/api/applications", verifyToken, verifyUser, async (req: Request, res: Response) => {
       try {
         const application = req.body;
 
@@ -571,3 +586,4 @@ app.get("/", (req: Request, res: Response) => {
 app.listen(PORT, () => {
   console.log(`Server is running on: ${PORT}`);
 });
+
