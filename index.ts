@@ -1,4 +1,4 @@
-import express, { Request, Response } from "express";
+import express, { NextFunction, Request, Response } from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 import { Filter, ObjectId } from "mongodb";
@@ -34,8 +34,90 @@ async function run() {
 
     // Create or Access to DB Collections
     const userCollection = db.collection("user");
+    const sessionCollection = db.collection("session");
     const squadsCollection = db.collection("squads");
     const applicationsCollection = db.collection("applications");
+
+    interface UserData {
+      _id?: string;
+      name: string;
+      email: string;
+      image: string;
+      createdAt: Date;
+      updatedAt: Date;
+      role: string;
+    }
+
+    interface AuthenticatedRequest extends Request {
+      user?: UserData;
+    }
+
+    // ====================  Varifications  ====================
+    const verifyToken = async (
+      req: AuthenticatedRequest,
+      res: Response,
+      next: NextFunction,
+    ) => {
+      const authHeader = req.headers?.authorization;
+
+      // check if authHeader doesn't exist
+      if (!authHeader) {
+        return res.status(401).send({ message: "unauthorized access" });
+      }
+
+      // Access the token
+      const token = authHeader.split(" ")[1];
+
+      // Is token doesn't exist
+      if (!token) {
+        return res.status(401).send({ message: "unauthorized access" });
+      }
+
+      const query = { token: token };
+      const session = await sessionCollection.findOne(query);
+
+      if (!session) {
+        return res.status(401).send({ message: "unauthorized access" });
+      }
+
+      const userId = session.userId;
+
+      const userData = {
+        _id: userId,
+      };
+
+      const user = await userCollection.findOne(userData);
+      if (!user) {
+        return res.status(401).send({ message: "unauthorized access" });
+      }
+
+      req.user = user as UserData;
+      next();
+    };
+
+    // For Admin
+    const verifyAdmin = async (
+      req: AuthenticatedRequest,
+      res: Response,
+      next: NextFunction,
+    ) => {
+      if (req.user?.role !== "admin") {
+        return res.status(403).json({ message: "forbidden access" });
+      }
+      next();
+    };
+
+    // For User
+    const verifyUser = async (
+      req: AuthenticatedRequest,
+      res: Response,
+      next: NextFunction,
+    ) => {
+      if (req.user?.role !== "user") {
+        return res.status(403).json({ message: "forbidden access" });
+      }
+      next();
+    };
 
     // ====================  Users  ====================
     // Get Users Data
@@ -45,11 +127,13 @@ async function run() {
           .find({})
           .sort({ createdAt: -1 })
           .toArray();
+        const totalUsers = await userCollection.countDocuments();
 
         res.status(200).json({
           success: true,
           message: "Most recent users retrieved successfully",
           data: users,
+          totalUsers,
         });
       } catch (error) {
         console.error("Error fetching users:", error);
