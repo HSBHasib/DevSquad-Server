@@ -262,6 +262,99 @@ async function run() {
       }
     });
 
+    // Update Squad Data From DB
+    app.patch("/api/squads/:id", async (req: Request, res: Response) => {
+      try {
+        const { id } = req.params; // Application ID
+        const { status: targetStatus } = req.body; // Status
+
+        if (!id) {
+          return res
+            .status(400)
+            .send({ success: false, message: "Application ID is required" });
+        }
+
+        if (!targetStatus || !["approved", "rejected"].includes(targetStatus)) {
+          return res.status(400).send({
+            success: false,
+            message: "Valid status (approved/rejected) is required",
+          });
+        }
+
+        // Get applicationsCollection Data using Application ID
+        const appFilter = { _id: new ObjectId(id as string) };
+        const application = await applicationsCollection.findOne(appFilter);
+
+        if (!application) {
+          return res
+            .status(404)
+            .send({ success: false, message: "Application not found" });
+        }
+
+        // Access the current status and squadId
+        const currentStatus = application.status;
+        const squadId = application.squadId;
+
+        if (!squadId) {
+          return res.status(400).send({
+            success: false,
+            message: "Squad ID not found in this application",
+          });
+        }
+
+        const squadFilter = { _id: new ObjectId(squadId as string) };
+        let squadUpdateDoc: any = {};
+
+
+        // Update joinedCount based on status
+        if (targetStatus === "approved") {
+          // Check DB Status Value
+          if (currentStatus !== "approved") {
+            squadUpdateDoc = {
+              $inc: { joinedCount: 1 },
+            };
+          }
+        } else if (targetStatus === "rejected") {
+          // check IF status value already approved than update joinedCount
+          if (currentStatus === "approved") {
+            squadUpdateDoc = {
+              $inc: { joinedCount: -1 },
+            };
+          }
+        }
+
+        // Update Application Status
+        await applicationsCollection.updateOne(appFilter, {
+          $set: { status: targetStatus },
+        });
+
+        // If Status not approved or rejected than it works
+        let squadUpdated = false;
+        if (Object.keys(squadUpdateDoc).length > 0) {
+          await squadsCollection.updateOne(squadFilter, squadUpdateDoc);
+          squadUpdated = true;
+        }
+
+
+        res.status(200).send({
+          success: true,
+          message:
+            "Application status updated and squad joinedCount Updated successfully!",
+          updatedStatus: targetStatus,
+          squadUpdated: squadUpdated,
+        });
+      } catch (err: unknown) {
+        const errorMessage =
+          err instanceof Error ? err.message : "Unknown error occurred";
+        console.error("Error in patch api:", err);
+        res.status(500).json({
+          success: false,
+          message: "Internal Server Error. Something went wrong!",
+          error: errorMessage,
+        });
+      }
+    });
+
     // Delete Squad Data From DB
     app.delete("/api/squads/:id", async (req: Request, res: Response) => {
       try {
