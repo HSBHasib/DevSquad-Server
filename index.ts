@@ -1,7 +1,7 @@
 import express, { Request, Response } from "express";
 import cors from "cors";
 import dotenv from "dotenv";
-import { Document, Filter, ObjectId } from "mongodb";
+import { Filter, ObjectId } from "mongodb";
 
 dotenv.config();
 
@@ -294,6 +294,11 @@ async function run() {
         // Access the current status and squadId
         const currentStatus = application.status;
         const squadId = application.squadId;
+        const userEmail = application.email;
+        const userName = application.name || "Applicant";
+        const squadName = application.squadName || "the Squad";
+        const communicationLink =
+          application.communicationLink || "No Communication Link";
 
         if (!squadId) {
           return res.status(400).send({
@@ -304,7 +309,6 @@ async function run() {
 
         const squadFilter = { _id: new ObjectId(squadId as string) };
         let squadUpdateDoc: any = {};
-
 
         // Update joinedCount based on status
         if (targetStatus === "approved") {
@@ -335,13 +339,18 @@ async function run() {
           squadUpdated = true;
         }
 
-
         res.status(200).send({
           success: true,
           message:
             "Application status updated and squad joinedCount Updated successfully!",
           updatedStatus: targetStatus,
           squadUpdated: squadUpdated,
+          applicantData: {
+            email: userEmail,
+            name: userName,
+            squadName: squadName,
+            communicationLink: communicationLink,
+          },
         });
       } catch (err: unknown) {
         const errorMessage =
@@ -405,46 +414,17 @@ async function run() {
           const limitNum = parseInt(limit || "10", 10);
           const skipNum = (pageNum - 1) * limitNum;
 
-          const pipeline: Document[] = [
-            { $match: { ownerId } },
-            {
-              $addFields: {
-                squadObjectId: { $toObjectId: "$squadId" },
-              },
-            },
-            {
-              $lookup: {
-                from: "squads",
-                localField: "squadObjectId",
-                foreignField: "_id",
-                as: "squadDetails",
-              },
-            },
-            {
-              $unwind: {
-                path: "$squadDetails",
-                preserveNullAndEmptyArrays: true,
-              },
-            },
-            {
-              $addFields: {
-                squadName: {
-                  $ifNull: ["$squadDetails.projectName", "Unknown Squad"],
-                },
-              },
-            },
-            { $project: { squadDetails: 0, squadObjectId: 0 } },
-            { $sort: { _id: -1 } },
-            { $skip: skipNum },
-            { $limit: limitNum },
-          ];
-
           const applications = await applicationsCollection
-            .aggregate(pipeline)
+            .find({ ownerId })
+            .sort({ _id: -1 })
+            .skip(skipNum)
+            .limit(limitNum)
             .toArray();
 
           const totalMatchingApps = await applicationsCollection.countDocuments(
-            { ownerId },
+            {
+              ownerId,
+            },
           );
 
           res.status(200).json({
